@@ -1,0 +1,360 @@
+#Laboratorio 8
+#Ejercicio 2
+import cv2
+import numpy as np
+
+class camera_code:
+    def __init__(self):
+        self.video = cv2.VideoCapture(0)
+        self.current_filter = 'original'
+        self.setup_window()
+        
+    def setup_window(self):
+        cv2.namedWindow("camara")
+        
+    def apply_original(self, frame):
+        return frame
+        
+    def apply_edge_detection(self, frame):
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, 100, 200)
+        return cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+        
+    def apply_histogram(self, frame):
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        return cv2.equalizeHist(gray)
+        
+    def apply_laplacian(self, frame):
+        laplace = np.array([[-1,0,1],[-2,0,2],[-1,0,1]])
+        return cv2.filter2D(frame,-1,laplace)
+        
+    def run(self):
+        while True:
+            ret, frame = self.video.read()
+            if not ret:
+                print("Error: Could not read frame")
+                break
+                
+            if self.current_filter == 'original':
+                filtered_frame = self.apply_original(frame)
+            elif self.current_filter == 'edge':
+                filtered_frame = self.apply_edge_detection(frame)
+            elif self.current_filter == 'histogram':
+                filtered_frame = self.apply_histogram(frame)
+            elif self.current_filter == 'laplacian':
+                filtered_frame = self.apply_laplacian(frame)
+            
+            key = cv2.waitKey(1) & 0xFF
+
+            if key == ord('q'):
+                break
+            elif key == ord('a'):
+                self.current_filter = 'edge'
+            elif key == ord('b'):
+                self.current_filter = 'histogram'
+            elif key == ord('c'):
+                self.current_filter = 'laplacian'
+            elif key == ord('o'):
+                self.current_filter = 'original'
+
+            cv2.imshow("Camera Filter App", filtered_frame)
+                
+        self.video.release()
+        cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    program = camera_code()
+    program.run()
+
+#ej 3
+import cv2
+import os
+
+class RegionCapture:
+    def __init__(self, save_dir="Captures"):
+        self.save_dir = save_dir
+        os.makedirs(self.save_dir, exist_ok=True)
+        self.cap = cv2.VideoCapture(0)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)  # Opcional: reducir resolución
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        self.drawing = False
+        self.ix, self.iy = -1, -1
+        self.fx, self.fy = -1, -1
+        self.frame = None
+        self.clone = None
+        self.roi = None
+
+    def draw_rectangle(self, event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            self.drawing = True
+            self.ix, self.iy = x, y
+        elif event == cv2.EVENT_MOUSEMOVE:
+            if self.drawing:
+                self.fx, self.fy = x, y
+        elif event == cv2.EVENT_LBUTTONUP:
+            self.drawing = False
+            self.fx, self.fy = x, y
+            self.roi = self.frame[min(self.iy, self.fy):max(self.iy, self.fy),
+                                  min(self.ix, self.fx):max(self.ix, self.fx)]
+
+    def start(self):
+        cv2.namedWindow("Selecciona región con el mouse")
+        cv2.setMouseCallback("Selecciona región con el mouse", self.draw_rectangle)
+
+        while True:
+            ret, self.frame = self.cap.read()
+            if not ret:
+                break
+
+            self.clone = self.frame.copy()
+
+            if self.drawing:
+                cv2.rectangle(self.clone, (self.ix, self.iy), (self.fx, self.fy), (0, 255, 0), 2)
+
+            cv2.imshow("Selecciona región con el mouse", self.clone)
+
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('s') and self.roi is not None:
+                roi_path = os.path.join(self.save_dir, "image1.jpg")
+                cv2.imwrite(roi_path, self.roi)
+                print(f"Imagen guardada: {roi_path}")
+                self.process_image(roi_path)
+                break
+            elif key == ord('q'):
+                break
+
+        self.cap.release()
+        cv2.destroyAllWindows()
+
+    def process_image(self, path):
+        img = cv2.imread(path)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        h, w = gray.shape
+        half_h, half_w = h // 2, w // 2
+
+        quadrants = {
+            "top_left": gray[0:half_h, 0:half_w],
+            "top_right": gray[0:half_h, half_w:w],
+            "bottom_left": gray[half_h:h, 0:half_w],
+            "bottom_right": gray[half_h:h, half_w:w]
+        }
+
+        for name, quad in quadrants.items():
+            quad_path = os.path.join(self.save_dir, f"{name}.jpg")
+            cv2.imwrite(quad_path, quad)
+            print(f"Cuadrante guardado: {quad_path}")
+
+if __name__ == "__main__":
+    rc = RegionCapture()
+    rc.start()
+
+
+#ej 4
+import cv2
+import os
+
+class FrameCapture:
+    def __init__(self, save_dir="Captures1"):
+        self.save_dir = save_dir
+        os.makedirs(self.save_dir, exist_ok=True)
+        self.cap = cv2.VideoCapture(0)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        self.frame = None
+
+    def start(self):
+        while True:
+            ret, self.frame = self.cap.read()
+            if not ret:
+                break
+
+            cv2.imshow("Webcam", self.frame)
+
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('f'):
+                path = os.path.join(self.save_dir, "image1.jpg")
+                cv2.imwrite(path, self.frame)
+                print(f"Imagen guardada: {path}")
+                self.process_image(path)
+                break
+            elif key == ord('q'):
+                break
+
+        self.cap.release()
+        cv2.destroyAllWindows()
+
+    def process_image(self, path):
+        img = cv2.imread(path)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        h, w = gray.shape
+        half_h, half_w = h // 2, w // 2
+
+        quadrants = {
+            "top_left": gray[0:half_h, 0:half_w],
+            "top_right": gray[0:half_h, half_w:w],
+            "bottom_left": gray[half_h:h, 0:half_w],
+            "bottom_right": gray[half_h:h, half_w:w]
+        }
+
+        for name, quad in quadrants.items():
+            quad_path = os.path.join(self.save_dir, f"{name}.jpg")
+            cv2.imwrite(quad_path, quad)
+            print(f"Cuadrante guardado: {quad_path}")
+
+if __name__ == "__main__":
+    fc = FrameCapture()
+    fc.start()
+
+
+#ej 5
+import cv2
+
+image = cv2.imread('f1.jpg')
+
+# Redimensionar al 80%
+scale_percent = 60  
+width = int(image.shape[1] * scale_percent / 100)
+height = int(image.shape[0] * scale_percent / 100)
+resized = cv2.resize(image, (width, height))
+
+gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+
+ret, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+
+contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+cv2.drawContours(resized, contours, -1, (0, 255, 0), 2)
+
+cv2.imshow('Contours', resized)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
+
+
+#ej 6
+import cv2
+
+cap = cv2.VideoCapture(0)
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    _, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+
+    contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    cv2.drawContours(frame, contours, -1, (0, 255, 0), 2)
+
+    cv2.imshow("Contours", frame)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
+
+
+#ej 8 
+import cv2
+import RPi.GPIO as GPIO
+import time
+
+BUZZER_PIN = 23
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(BUZZER_PIN, GPIO.OUT)
+
+cap = cv2.VideoCapture(0)
+
+fgbg = cv2.createBackgroundSubtractorMOG2()
+
+try:
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        fgmask = fgbg.apply(frame)
+
+        movement = cv2.countNonZero(fgmask)
+
+        if movement > 5000: 
+            print("¡Movimiento detectado!")
+            GPIO.output(BUZZER_PIN, GPIO.HIGH)
+        else:
+            GPIO.output(BUZZER_PIN, GPIO.LOW)
+
+        cv2.imshow('Movimiento', fgmask)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+except KeyboardInterrupt:
+    print("Interrumpido por el usuario")
+
+finally:
+
+    cap.release()
+    cv2.destroyAllWindows()
+    GPIO.cleanup()
+
+
+#ej 9 
+import cv2
+import RPi.GPIO as GPIO
+import time
+import serial
+
+ser = serial.Serial('/dev/ttyACM1', 115200, timeout=1)  
+cap = cv2.VideoCapture(0)
+
+fgbg = cv2.createBackgroundSubtractorMOG2()
+
+try:
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("Error al abrir la cámara")
+            break
+
+        fgmask = fgbg.apply(frame)
+        fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, None)
+
+        # Buscar contornos
+        contours, _ = cv2.findContours(fgmask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # Filtrar contornos pequeños para evitar ruido
+        min_area = 500  # Área mínima para considerar un objeto
+        valid_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_area]
+
+        # Dibujar contornos en el frame original
+        cv2.drawContours(frame, valid_contours, -1, (0, 255, 0), 2)
+
+        num_objects = len(valid_contours)
+        print(f"Objetos detectados: {num_objects}")
+
+        # Controlar LEDs según número de objetos
+        if num_objects > 1:
+            ser.write(b'2\n')  
+        elif num_objects == 1:
+            ser.write(b'1\n') 
+        else:
+            ser.write(b'0\n')  # Enviar 0 si no hay objetos
+
+        cv2.imshow('Movimiento', fgmask)
+        cv2.imshow('Camara', frame)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+        time.sleep(0.05)
+
+except KeyboardInterrupt:
+    print("Interrumpido por el usuario")
+
+finally:
+    cap.release()
+    cv2.destroyAllWindows()
+    ser.close()
