@@ -1,0 +1,292 @@
+#Labo 9
+#ej 1
+import cv2 as cv
+import numpy as np
+
+video = cv.VideoCapture("/home/raspdcl/Lab9/bouncing.mp4.mp4")
+image = cv.imread('/home/raspdcl/Lab9/back.jpeg')
+
+# Setting Trackbars
+def nothing(self):
+    pass
+
+while True:
+    res, frame = video.read()
+    frame = cv.resize(frame, (640, 400))
+    
+    image = cv.resize(image, (640, 400))
+    hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
+
+    lower_v = np.array([60, 10, 170])
+    higher_v = np.array([120, 255, 255])
+    
+    mask = cv.inRange(hsv, lower_v, higher_v)
+    
+    resultant = cv.bitwise_and(frame,frame, mask=mask)
+    
+    cv.imshow('Video',frame)
+    green_screen = np.where(frame-resultant==0, image, frame-resultant)
+    cv.imshow('Resultant', green_screen)
+
+    k = cv.waitKey(1)
+    if k == ord('q'):
+        break
+
+video.release()
+cv.destroyAllWindows()
+
+#ej 2
+import cv2
+import numpy as np
+
+cap = cv2.VideoCapture(0)
+backSub = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=50, detectShadows=False)
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    frame = cv2.resize(frame, (640, 480))
+
+    # Aplicar sustracción de fondo
+    fg_mask = backSub.apply(frame)
+
+    # Limpiar máscara
+    _, fg_mask = cv2.threshold(fg_mask, 250, 255, cv2.THRESH_BINARY)
+    fg_mask = cv2.erode(fg_mask, None, iterations=1)
+    fg_mask = cv2.dilate(fg_mask, None, iterations=2)
+
+    # Eliminar fondo
+    foreground = cv2.bitwise_and(frame, frame, mask=fg_mask)
+
+    # Evaluar si hay objeto en el centro
+    object_detected = False
+    center_x_min, center_x_max = 220, 420
+    center_y_min, center_y_max = 160, 320
+
+    contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if area > 500:
+            x, y, w, h = cv2.boundingRect(cnt)
+            cx, cy = x + w // 2, y + h // 2
+            if center_x_min <= cx <= center_x_max and center_y_min <= cy <= center_y_max:
+                object_detected = True
+                break
+
+    # Mostrar mensaje si el objeto está en el centro
+    if object_detected:
+        cv2.putText(foreground, "Object Detected", (400, 470), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.8, (0, 0, 255), 2)
+
+    cv2.imshow("Foreground", foreground)
+
+    if cv2.waitKey(30) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
+
+#ej 3
+import cv2
+import numpy as np
+
+cap = cv2.VideoCapture('recursos lab 9/bouncing.mp4')
+
+# Create a background subtractor
+backSub = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=50, detectShadows=False)
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    # Apply background subtraction to get the foreground mask
+    fg_mask = backSub.apply(frame)
+
+    # Clean up the mask by removing noise
+    _, fg_mask = cv2.threshold(fg_mask, 250, 255, cv2.THRESH_BINARY)
+    fg_mask = cv2.erode(fg_mask, None, iterations=1)
+    fg_mask = cv2.dilate(fg_mask, None, iterations=2)
+
+    # Find contours of the moving objects
+    contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Draw the contours on the frame
+    cv2.drawContours(frame, contours, -1, (0, 255, 0), 2)  # Green contours with thickness of 2
+
+    cv2.imshow("Contours of Moving Objects", frame)
+
+    if cv2.waitKey(30) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
+
+#ej 4
+import cv2
+import numpy as np
+
+image = cv2.imread('recursos lab 9/monedas_2.jpg')
+
+# Redimensionar
+height, width = image.shape[:2]
+new_width = int(width * 0.5)
+new_height = int(height * 0.5)
+resized_image = cv2.resize(image, (new_width, new_height))
+
+# Convertir a escala de grises
+gray = cv2.cvtColor(resized_image, cv2.COLOR_BGR2GRAY)
+
+# Aplicar desenfoque gaussiano
+blurred = cv2.GaussianBlur(gray, (15, 15), 0)
+
+# Detección de bordes con Canny
+edges = cv2.Canny(blurred, 30, 150)
+
+# Encontrar contornos
+contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+# Filtrar contornos pequeños (ruido)
+filtered_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > 38]
+
+# Dibujar los contornos sobre la imagen redimensionada
+output_image = resized_image.copy()
+cv2.drawContours(output_image, filtered_contours, -1, (0, 255, 0), 2)  # Verde, grosor 2
+
+# Mostrar la imagen con contornos
+cv2.imshow('Coins Detected', output_image)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
+
+# Imprimir número de monedas detectadas
+print(f"Number of coins detected: {len(filtered_contours)}")
+
+
+#ej 5
+import cv2
+import numpy as np
+import serial
+import time
+
+puerto = serial.Serial(
+    port='/dev/ttyACM0q',
+    baudrate=115200,
+    timeout=1
+)
+
+time.sleep(2)  
+cap = cv2.VideoCapture(0)
+backSub = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=50, detectShadows=False)
+
+print("Conexión iniciada. Detección en curso...")
+
+try:
+    while True:
+        # Leer frame de la cámara
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        frame = cv2.resize(frame, (640, 480))
+
+        # Sustracción de fondo
+        fg_mask = backSub.apply(frame)
+
+        # Limpiar máscara
+        _, fg_mask = cv2.threshold(fg_mask, 250, 255, cv2.THRESH_BINARY)
+        fg_mask = cv2.erode(fg_mask, None, iterations=1)
+        fg_mask = cv2.dilate(fg_mask, None, iterations=2)
+
+        # Extraer solo el objeto en movimiento
+        foreground = cv2.bitwise_and(frame, frame, mask=fg_mask)
+
+        # Definir zona central
+        center_x_min, center_x_max = 220, 420
+        object_detected = False
+
+        contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if area > 500:
+                x, y, w, h = cv2.boundingRect(cnt)
+                cx = x + w // 2
+
+                # Decisión de dirección según la posición del objeto
+                if cx < center_x_min:
+                    puerto.write(b'1')
+                    print("L (LEFT)")
+                elif cx > center_x_max:
+                    puerto.write(b'2')
+                    print("R (RIGHT)")
+                else:
+                    puerto.write(b'3')
+                    print("F (FORWARD)")
+                object_detected = True
+                break
+
+        if not object_detected:
+            puerto.write(b'0')
+            print("S (STOP)")
+
+        # Verificar si hay datos recibidos
+        if puerto.in_waiting > 0:
+            dato = puerto.read().decode('utf-8')
+            print(f"[RX] Recibido: {dato}")
+
+        cv2.imshow("Foreground", foreground)
+        if cv2.waitKey(30) & 0xFF == ord('q'):
+            break
+
+except KeyboardInterrupt:
+    print("\nFinalizando conexión...")
+
+finally:
+    cap.release()
+    cv2.destroyAllWindows()
+    puerto.close()
+
+
+#ej 8 
+import cv2
+
+image = cv2.imread('/home/raspdcl/Lab9/figuras.png')
+gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+canny = cv2.Canny(gray, 10, 150)
+canny = cv2.dilate(canny, None, iterations=1)
+canny = cv2.erode(canny, None, iterations=1)
+#_, th = cv2.threshold(gray, 10, 255, cv2.THRESH_BINARY)
+#_,cnts,_ = cv2.findContours(canny, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)# OpenCV 3
+cnts,_ = cv2.findContours(canny, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)# OpenCV 4
+#cv2.drawContours(image, cnts, -1, (0,255,0), 2)
+
+for c in cnts:
+    epsilon = 0.01*cv2.arcLength(c,True)
+    approx = cv2.approxPolyDP(c,epsilon,True)
+    #print(len(approx))
+    x,y,w,h = cv2.boundingRect(approx)
+
+    if len(approx)==3:
+        cv2.putText(image,'Triangulo', (x,y-5),1,1,(0,255,0),1)
+
+    if len(approx)==4:
+        aspect_ratio = float(w)/h
+        print('aspect_ratio= ', aspect_ratio)
+        if aspect_ratio == 1:
+            cv2.putText(image,'Cuadrado', (x,y-5),1,1,(0,255,0),1)
+        else:
+            cv2.putText(image,'Rectangulo', (x,y-5),1,1,(0,255,0),1)
+
+    if len(approx)==5:
+        cv2.putText(image,'Pentagono', (x,y-5),1,1,(0,255,0),1)
+
+    if len(approx)==6:
+        cv2.putText(image,'Hexagono', (x,y-5),1,1,(0,255,0),1)
+
+    if len(approx)>10:
+        cv2.putText(image,'Circulo', (x,y-5),1,1,(0,255,0),1)
+
+    cv2.drawContours(image, [approx], 0, (0,255,0),2)
+    cv2.imshow('image',image)
+    cv2.waitKey(0)
